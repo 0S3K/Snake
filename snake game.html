@@ -1,0 +1,446 @@
+<html>
+<head>
+    <title>Snake Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222222;
+            color: white;
+            font-family: Arial, sans-serif;
+            background-image: url('https://www.transparenttextures.com/patterns/asfalt-dark.png');
+            background-blend-mode: overlay;
+        }
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #gameCanvas {
+            background-color: black;
+            display: block;
+            border: 2px solid white; /* Borda branca ao redor da área jogável */
+        }
+        #score {
+            font-size: 24px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border: 2px solid white;
+            border-radius: 5px;
+            margin-right: 20px;
+        }
+        #gameOverText {
+            position: absolute;
+            display: none;
+            font-size: 48px;
+            font-weight: bold;
+            color: red;
+        }
+        .button {
+            font-size: 24px;
+            margin-top: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 2px solid white;
+            border-radius: 5px;
+        }
+        #retryButton {
+            display: none;
+        }
+        #downloadButton {
+            display: none;
+            margin-left: 10px;
+        }
+        #tutorial {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .arrow-keys {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .arrow-keys div {
+            display: flex;
+        }
+        .arrow-keys div span {
+            width: 30px;
+            height: 30px;
+            border: 1px solid white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 2px;
+        }
+        .highlight {
+            background-color: yellow;
+        }
+        #settings {
+            margin-left: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        #settings label {
+            margin-bottom: 5px;
+        }
+        #settings input {
+            margin-bottom: 10px;
+        }
+        #resetSettingsButton {
+            margin-top: 10px;
+            padding: 10px;
+            cursor: pointer;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 2px solid white;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 000</div>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <div>
+            <button id="retryButton" class="button">Try Again</button>
+            <button id="downloadButton" class="button">Download PrtSc</button>
+        </div>
+    </div>
+    <div id="settings">
+        <label for="bgColor">Background Color:</label>
+        <input type="color" id="bgColor" value="#000000">
+        <label for="snakeColor1">Snake Color 1:</label>
+        <input type="color" id="snakeColor1" value="#006400">
+        <label for="snakeColor2">Snake Color 2:</label>
+        <input type="color" id="snakeColor2" value="#006400">
+        <label for="snakeHeadColor">Snake Head Color:</label>
+        <input type="color" id="snakeHeadColor" value="#00FF00">
+        <label for="foodColor">Food Color:</label>
+        <input type="color" id="foodColor" value="#FF0000">
+        <label for="initialSpeed">Initial Speed (%):</label>
+        <input type="range" id="initialSpeed" min="5" max="100" value="50">
+        <button id="resetSettingsButton" class="button">Reset Settings</button>
+    </div>
+    <div id="gameOverText">GAME OVER</div>
+    <div id="tutorial">
+        <div class="arrow-keys">
+            <div><span id="upKey">&uarr;</span></div>
+            <div>
+                <span id="leftKey">&larr;</span>
+                <span id="downKey">&darr;</span>
+                <span id="rightKey">&rarr;</span>
+            </div>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverText = document.getElementById('gameOverText');
+        const retryButton = document.getElementById('retryButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const bgColorInput = document.getElementById('bgColor');
+        const snakeColor1Input = document.getElementById('snakeColor1');
+        const snakeColor2Input = document.getElementById('snakeColor2');
+        const snakeHeadColorInput = document.getElementById('snakeHeadColor');
+        const foodColorInput = document.getElementById('foodColor');
+        const initialSpeedInput = document.getElementById('initialSpeed');
+        const resetSettingsButton = document.getElementById('resetSettingsButton');
+        const upKey = document.getElementById('upKey');
+        const leftKey = document.getElementById('leftKey');
+        const downKey = document.getElementById('downKey');
+        const rightKey = document.getElementById('rightKey');
+
+        const gridSize = 20;  // Tamanho de cada bloco na grade
+        const tileCount = canvas.width / gridSize;  // Quantidade de blocos na horizontal/vertical
+
+        let snake, food, score, velocity, gameRunning, gameSpeed, gameInterval, nextVelocity;
+
+        // Função para converter a velocidade em porcentagem para milissegundos
+        function convertSpeed(percentage) {
+            const minSpeed = 20;  // Velocidade máxima (20ms)
+            const maxSpeed = 200; // Velocidade mínima (200ms)
+            return maxSpeed - ((percentage - 5) * (maxSpeed - minSpeed) / 95);
+        }
+
+        // Função para salvar as configurações no localStorage
+        function saveSettings() {
+            const settings = {
+                bgColor: bgColorInput.value,
+                snakeColor1: snakeColor1Input.value,
+                snakeColor2: snakeColor2Input.value,
+                snakeHeadColor: snakeHeadColorInput.value,
+                foodColor: foodColorInput.value,
+                initialSpeed: initialSpeedInput.value
+            };
+            localStorage.setItem('snakeGameSettings', JSON.stringify(settings));
+        }
+
+        // Função para carregar as configurações do localStorage
+        function loadSettings() {
+            const settings = JSON.parse(localStorage.getItem('snakeGameSettings'));
+            if (settings) {
+                bgColorInput.value = settings.bgColor;
+                snakeColor1Input.value = settings.snakeColor1;
+                snakeColor2Input.value = settings.snakeColor2;
+                snakeHeadColorInput.value = settings.snakeHeadColor;
+                foodColorInput.value = settings.foodColor;
+                initialSpeedInput.value = settings.initialSpeed;
+            }
+        }
+
+        // Função para resetar as configurações para os valores padrão
+        function resetSettings() {
+            bgColorInput.value = "#000000";
+            snakeColor1Input.value = "#006400";
+            snakeColor2Input.value = "#006400";
+            snakeHeadColorInput.value = "#00FF00";
+            foodColorInput.value = "#FF0000";
+            initialSpeedInput.value = "50";
+            saveSettings();
+        }
+
+        // Função para reiniciar o jogo
+        function resetGame() {
+            snake = [  // Posições iniciais da cobra
+                { x: 5, y: 5 },
+                { x: 4, y: 5 },
+                { x: 3, y: 5 }
+            ];
+            food = { x: 10, y: 10 };  // Posição inicial da comida
+            score = 0;  // Inicializa a pontuação
+            velocity = { x: 1, y: 0 };  // Velocidade inicial da cobra (direção)
+            nextVelocity = { x: 1, y: 0 };  // Próxima velocidade da cobra (direção)
+            gameRunning = true;  // Controla o estado do jogo
+            gameSpeed = convertSpeed(parseInt(initialSpeedInput.value));  // Velocidade inicial do jogo
+
+            gameOverText.style.display = 'none';  // Esconde o texto de Game Over
+            retryButton.style.display = 'none';  // Esconde o botão de tentar novamente
+            downloadButton.style.display = 'none';  // Esconde o botão de download
+            updateScore();  // Reseta o placar
+
+            clearInterval(gameInterval);
+            gameInterval = setInterval(gameLoop, gameSpeed);
+        }
+
+        // Função para desenhar o jogo
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);  // Limpa a tela
+
+            // Desenha a cobra
+            snake.forEach((part, index) => {
+                if (index === 0) {
+                    ctx.fillStyle = snakeHeadColorInput.value;
+                } else {
+                    ctx.fillStyle = index % 2 === 0 ? snakeColor1Input.value : snakeColor2Input.value;
+                }
+                ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize);
+                ctx.strokeStyle = 'black';
+                ctx.strokeRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize);
+            });
+
+            // Desenha a comida
+            ctx.fillStyle = foodColorInput.value;
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+
+            // Atualiza o placar
+            updateScore();
+        }
+
+        // Função para movimentar a cobra
+        function moveSnake() {
+            // Atualiza a velocidade da cobra
+            velocity = nextVelocity;
+
+            // Calcula a nova posição da cabeça da cobra
+            const newHead = {
+                x: snake[0].x + velocity.x,
+                y: snake[0].y + velocity.y
+            };
+
+            // Insere a nova cabeça no início do array da cobra
+            snake.unshift(newHead);
+
+            // Verifica se a cobra comeu a comida
+            if (newHead.x === food.x && newHead.y === food.y) {
+                score++;  // Incrementa a pontuação
+                placeFood();  // Gera uma nova comida
+
+                // Aumenta a velocidade do jogo a cada 10 pontos
+                if (score % 10 === 0) {
+                    gameSpeed = Math.max(20, gameSpeed - 10);
+                    clearInterval(gameInterval);
+                    gameInterval = setInterval(gameLoop, gameSpeed);
+                }
+            } else {
+                snake.pop();  // Remove a última parte da cobra (não cresce)
+            }
+
+            // Verifica colisão com parede ou com o próprio corpo
+            if (checkCollision(newHead)) {
+                gameOver();  // Termina o jogo em caso de colisão
+            }
+        }
+
+        // Função para colocar a comida em uma nova posição aleatória
+        function placeFood() {
+            let newFoodPosition;
+            do {
+                newFoodPosition = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * (canvas.height / gridSize))
+                };
+            } while (snake.some(part => part.x === newFoodPosition.x && part.y === newFoodPosition.y));
+            food = newFoodPosition;
+        }
+
+        // Função para verificar colisão da cobra
+        function checkCollision(head) {
+            // Colisão com a parede
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= (canvas.height / gridSize)) {
+                return true;
+            }
+
+            // Colisão com o próprio corpo
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[i].x === head.x && snake[i].y === head.y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Função para exibir Game Over
+        function gameOver() {
+            gameRunning = false;
+            gameOverText.style.display = 'block';  // Mostra a mensagem de Game Over
+            retryButton.style.display = 'block';  // Mostra o botão de tentar novamente
+            downloadButton.style.display = 'block';  // Mostra o botão de download
+            clearInterval(gameInterval);
+        }
+
+        // Função para controlar a direção da cobra via teclas
+        function changeDirection(event) {
+            const keyPressed = event.keyCode;
+            const LEFT = 37, UP = 38, RIGHT = 39, DOWN = 40;
+
+            switch (keyPressed) {
+                case LEFT:
+                    if (velocity.x === 0) nextVelocity = { x: -1, y: 0 };
+                    highlightKey(leftKey);
+                    break;
+                case UP:
+                    if (velocity.y === 0) nextVelocity = { x: 0, y: -1 };
+                    highlightKey(upKey);
+                    break;
+                case RIGHT:
+                    if (velocity.x === 0) nextVelocity = { x: 1, y: 0 };
+                    highlightKey(rightKey);
+                    break;
+                case DOWN:
+                    if (velocity.y === 0) nextVelocity = { x: 0, y: 1 };
+                    highlightKey(downKey);
+                    break;
+            }
+
+            // Reinicia o jogo se estiver em Game Over
+            if (!gameRunning) {
+                resetGame();
+            }
+        }
+
+        // Função para destacar a tecla pressionada
+        function highlightKey(keyElement) {
+            upKey.classList.remove('highlight');
+            leftKey.classList.remove('highlight');
+            downKey.classList.remove('highlight');
+            rightKey.classList.remove('highlight');
+            keyElement.classList.add('highlight');
+        }
+
+        // Função para atualizar o placar
+        function updateScore() {
+            scoreElement.textContent = `Score: ${score.toString().padStart(3, '0')}`;
+        }
+
+        // Função para fazer o download da captura de tela
+        function downloadScreenshot() {
+            const screenshotCanvas = document.createElement('canvas');
+            const screenshotCtx = screenshotCanvas.getContext('2d');
+            screenshotCanvas.width = canvas.width;
+            screenshotCanvas.height = canvas.height + scoreElement.offsetHeight;
+
+            // Desenha o fundo
+            screenshotCtx.fillStyle = bgColorInput.value;
+            screenshotCtx.fillRect(0, 0, screenshotCanvas.width, screenshotCanvas.height);
+
+            // Desenha o placar
+            screenshotCtx.font = window.getComputedStyle(scoreElement).font;
+            screenshotCtx.fillStyle = window.getComputedStyle(scoreElement).color;
+            screenshotCtx.fillText(scoreElement.textContent, 10, 30);
+
+            // Desenha o jogo
+            screenshotCtx.drawImage(canvas, 0, scoreElement.offsetHeight);
+
+            const link = document.createElement('a');
+            link.download = 'snake_game_score.png';
+            link.href = screenshotCanvas.toDataURL();
+            link.click();
+        }
+
+        // Adiciona o evento para detectar as teclas pressionadas
+        window.addEventListener('keydown', changeDirection);
+
+        // Loop principal do jogo
+        function gameLoop() {
+            if (gameRunning) {
+                moveSnake();
+                drawGame();
+            }
+        }
+
+        // Evento para reiniciar o jogo ao clicar no botão de tentar novamente
+        retryButton.addEventListener('click', resetGame);
+
+        // Evento para fazer o download da captura de tela ao clicar no botão de download
+        downloadButton.addEventListener('click', downloadScreenshot);
+
+        // Atualiza a cor de fundo do canvas
+        bgColorInput.addEventListener('input', () => {
+            canvas.style.backgroundColor = bgColorInput.value;
+            saveSettings();
+        });
+
+        // Atualiza a cor da cobra
+        snakeColor1Input.addEventListener('input', saveSettings);
+        snakeColor2Input.addEventListener('input', saveSettings);
+
+        // Atualiza a cor da cabeça da cobra
+        snakeHeadColorInput.addEventListener('input', saveSettings);
+
+        // Atualiza a cor da comida
+        foodColorInput.addEventListener('input', saveSettings);
+
+        // Atualiza a velocidade inicial
+        initialSpeedInput.addEventListener('input', saveSettings);
+
+        // Evento para resetar as configurações ao clicar no botão de resetar
+        resetSettingsButton.addEventListener('click', resetSettings);
+
+        // Carrega as configurações ao iniciar
+        loadSettings();
+
+        // Inicia o jogo
+        resetGame();
+    </script>
+</body>
+</html>
